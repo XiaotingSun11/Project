@@ -1,3 +1,4 @@
+Sun:
 ---
 title: "project"
 output: html_document
@@ -65,7 +66,7 @@ p+geom_point(color='blue')
 p+geom_point(aes(color='blue'))
 ```
 
-
+Li:
 ---
 title: "Untitled"
 output: html_document
@@ -286,6 +287,7 @@ vif(ab1)
 
 ```
 
+Sun:
 ```{r}
 summary(ab1)
 anova(ab1)
