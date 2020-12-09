@@ -1,0 +1,292 @@
+---
+title: "project"
+output: html_document
+---
+```{r}
+prices.split.adjusted <- read.csv("~/Desktop/prices-split-adjusted.csv",header=TRUE)
+```
+
+```{r}
+install.packages('ggfortify')
+install.packages('ggplot2')
+install.packages('cluster')
+install.packages('devtools')
+```
+
+```{r}
+library(ggfortify)
+library(ggplot2)
+library(cluster)
+library(vars)
+library(devtools)
+```
+
+```{r}
+fundamentals <- read.csv("~/Desktop/fundamentals.csv",header=TRUE)
+```
+
+```{r}
+install.packages('tidyquant')
+install.packages('timetk')
+```
+
+```{r}
+library(tidyquant)
+library(timetk)
+```
+
+```{r}
+install.packages('ggplot2')
+```
+
+```{r}
+library(ggplot2)
+```
+
+
+```{r}
+p<-ggplot(prices.split.adjusted,aes(date,close))
+prices.split.adjusted
+p+geom_point(color='red')
+p+geom_point(aes(color='red'))
+```
+
+```{r}
+p<-ggplot(prices.split.adjusted,aes(date,close-open))
+prices.split.adjusted
+p+geom_point(color='yellow')
+p+geom_point(aes(color='yellow'))
+```
+
+```{r}
+p<-ggplot(fundamentals,aes(Period.Ending,Net.Income))
+fundamentals
+p+geom_point(color='blue')
+p+geom_point(aes(color='blue'))
+```
+
+
+---
+title: "Untitled"
+output: html_document
+---
+
+```{r}
+#import data--------------------------------------------------------------------
+filepath1 <- "C:/archive/fundamentals.csv"
+filepath2 <- "C:/archive/prices-split-adjusted.csv"
+
+fdmt <- read.csv(filepath1, header = T)
+psa <- read.csv(filepath2, header = T)
+```
+```{r}
+#prepare data-------------------------------------------------------------------
+#change the date into year
+fdmt$Period.Ending <- substring(fdmt$Period.Ending, 1,4)
+psa$date <- substring(psa$date, 1,4)
+
+unique(fdmt$Period.Ending)
+unique(psa$date)
+```
+```{r}
+#get the financial data for each company per year
+#no fundamental data for companies in 2010 and 2011
+fdmt1 <- fdmt[which(fdmt$Period.Ending == "2012"),]
+fdmt2 <- fdmt[which(fdmt$Period.Ending == "2013"),]
+fdmt3 <- fdmt[which(fdmt$Period.Ending == "2014"),]
+fdmt4 <- fdmt[which(fdmt$Period.Ending == "2015"),]
+fdmt5 <- fdmt[which(fdmt$Period.Ending == "2016"),]
+```
+```{r}
+#calculate the average close prices for each company per year
+pri1 <- psa[which(psa$date == "2012"),]
+pri2 <- psa[which(psa$date == "2013"),]
+pri3 <- psa[which(psa$date == "2014"),]
+pri4 <- psa[which(psa$date == "2015"),]
+pri5 <- psa[which(psa$date == "2016"),]
+
+mean <- tapply(pri1$close, pri1$symbol, mean)
+Ticker.Symbol <- rownames(mean)
+ym1 <- data.frame(Ticker.Symbol, mean)
+
+mean <- tapply(pri2$close, pri2$symbol, mean)
+Ticker.Symbol <- rownames(mean)
+ym2 <- data.frame(Ticker.Symbol, mean)
+
+mean <- tapply(pri3$close, pri3$symbol, mean)
+Ticker.Symbol <- rownames(mean)
+ym3 <- data.frame(Ticker.Symbol, mean)
+
+mean <- tapply(pri4$close, pri4$symbol, mean)
+Ticker.Symbol <- rownames(mean)
+ym4 <- data.frame(Ticker.Symbol, mean)
+
+mean <- tapply(pri5$close, pri5$symbol, mean)
+Ticker.Symbol <- rownames(mean)
+ym5 <- data.frame(Ticker.Symbol, mean)
+
+```
+```{r}
+#merge the data into one data frame
+library(dplyr)
+d1 <- inner_join(fdmt1, ym1, by = "Ticker.Symbol")
+d2 <- inner_join(fdmt2, ym2, by = "Ticker.Symbol")
+d3 <- inner_join(fdmt3, ym3, by = "Ticker.Symbol")
+d4 <- inner_join(fdmt4, ym4, by = "Ticker.Symbol")
+d5 <- inner_join(fdmt5, ym5, by = "Ticker.Symbol")
+
+data <- rbind(d1, d2, d3, d4, d5)
+```
+```{r}
+#missing data processing
+nrow(data) #1749
+ncol(data) #80
+na <- data.frame(which(is.na(data),arr.ind = T))
+unique(na$col)
+
+cash <- which(is.na(data[,10]),arr.ind = T)
+for(i in 1:length(cash)){
+  data$Cash.Ratio[cash[i]] <- data$Cash.and.Cash.Equivalents[cash[i]]/data$Total.Current.Liabilities[cash[i]]*100
+}
+```
+```{r}
+#it is possible that the Total.Current.Liabilities is 0, therefore delete the rows with infinite value
+data <- data[-which(is.infinite(data[,10])),]
+
+which(is.na(data[,15])) #no missing data
+
+which(is.na(data[,62])) #no missing data
+
+eps <- which(is.na(data[,78]),arr.ind = T)
+for(i in 1:length(eps)){
+  data$Earnings.Per.Share[eps[i]] <- data$Total.Revenue[eps[i]]/data$Treasury.Stock[eps[i]]
+}
+
+data <- data[-which(is.infinite(data[,78])),]
+
+eso <- which(is.na(data[,79]),arr.ind = T)
+for(i in 1:length(eso)){
+  data$Estimated.Shares.Outstanding[eso[i]] <- data$Common.Stocks[eso[i]]/data$Treasury.Stock[eso[i]]
+}
+
+which(is.infinite(data[,79]))
+
+```
+```{r}
+#drop the column "For.Year" since we already have the time
+data <- data[,-77]
+
+#add one data point
+rdata <- rbind(data, data[79,])
+
+fun_pri <- rdata[,4:79]
+
+library(corrplot)
+cor <- cor(fun_pri[,1:75])
+corrplot(corr=cor, tl.pos="n")
+
+#select variables according to the correlation
+dat <- fun_pri[,c(8,9,12,13,15,19,23,26,27,29,31,43,44,46,47,48,58,62,65,67,72,73,74,75,76)]
+```
+```{r}
+#model selection----------------------------------------------------------------
+set.seed(123)
+rdm <- sample(1:1396, size = 20)
+
+sam <- dat[rdm,]
+
+par(mfrow = c(2,4))
+for(i in 1:8){
+  plot(sam[,i], sam[,25], xlab = i, ylab = "y")
+}
+par(mfrow = c(2,4))
+for(i in 9:16){
+  plot(sam[,i], sam[,25], xlab = i, ylab = "y")
+}
+par(mfrow = c(2,4))
+for(i in 17:24){
+  plot(sam[,i], sam[,25], xlab = i, ylab = "y")
+}
+
+
+#lot(log(dat[,1]), dat[,21])
+#plot(log(dat[,2]), dat[,21])
+#plot(log(dat[,4]), dat[,21])
+```
+```{r}
+#all-subset regression
+library(leaps)
+regfit.all = regsubsets(mean~., dat, nvmax = 15)
+regsum <- summary(regfit.all)
+
+plot(regfit.all, scale = "r2")
+plot(regfit.all, scale = "adjr2")
+plot(regfit.all, scale = "Cp")
+
+names(regsum)
+regsum$rsq
+regsum$rss
+regsum$adjr2
+regsum$cp
+regsum$bic
+
+order(regsum$adjr2, decreasing = T)
+order(regsum$cp, decreasing = F)
+order(regsum$bic, decreasing = F)
+
+#the best 5 model by all-subset regression
+coef(regfit.all,8)
+coef(regfit.all,9)
+coef(regfit.all,10)
+coef(regfit.all,11)
+coef(regfit.all,12)
+
+ab1 <- lm(mean~Current.Ratio+Gross.Profit+Liabilities+Other.Current.Assets+Short.Term.Investments+Total.Revenue+Treasury.Stock+Estimated.Shares.Outstanding, dat)
+ab2 <- lm(mean~Current.Ratio+Gross.Profit+Liabilities+Operating.Margin+Short.Term.Investments+Total.Revenue+Treasury.Stock+Earnings.Per.Share+Estimated.Shares.Outstanding, dat)
+ab3 <- lm(mean~Current.Ratio+Gross.Profit+Inventory+Liabilities+Operating.Margin+Short.Term.Investments+Total.Revenue+Treasury.Stock+Earnings.Per.Share+Estimated.Shares.Outstanding, dat)
+ab4 <- lm(mean~Current.Ratio+Gross.Profit+Inventory+Liabilities+Operating.Margin+Profit.Margin+Short.Term.Investments+Total.Revenue+Treasury.Stock+Earnings.Per.Share+Estimated.Shares.Outstanding, dat)
+ab5 <- lm(mean~Current.Ratio+Gross.Profit+Interest.Expense+Inventory+Liabilities+Operating.Margin+Profit.Margin+Short.Term.Investments+Total.Revenue+Treasury.Stock+Earnings.Per.Share+Estimated.Shares.Outstanding, dat)
+```
+```{r}
+library(olsrr)
+
+
+model <- mean~.
+fit <- lm(model, dat)
+##time-consuming
+#all <- ols_step_all_possible(fit)
+
+#backward
+bw <- ols_step_backward_p(fit, prem = 0.1)
+summary(bw$model)
+
+par(mfrow=c(2,2))
+plot(bw$model)
+
+aic <- AIC(ab1,ab2,ab3,ab4,ab5,bw$model)
+plot(aic)
+
+plot(ab1)
+
+#cook distance
+cooksd <- cooks.distance(ab1)
+plot(cooksd, pch="*", cex=2, main="Influential Obs by Cooks distance")
+abline(h = 4*mean(cooksd, na.rm=T), col="red")
+text(x=1:length(cooksd)+1, y=cooksd,labels=ifelse(cooksd>4*mean(cooksd, na.rm=T),names(cooksd),""), col="red", cex = 0.8)
+
+dat[which(cooksd>4*mean(cooksd, na.rm=T)),c(3,7,10,16,19,21,22,24)]
+
+#dat1 <- dat[-which(cooksd>4*mean(cooksd, na.rm=T)),]
+#ab1_re <- lm(mean~Current.Ratio+Gross.Profit+Liabilities+Other.Current.Assets+Short.Term.Investments+Total.Revenue+Treasury.Stock+Estimated.Shares.Outstanding, dat1)
+
+
+#VIF
+library(car)
+vif(ab1)
+
+```
+
+```{r}
+summary(ab1)
+anova(ab1)
+```
